@@ -1,0 +1,628 @@
+-- module API by PonyKuu
+-- Version 0.2
+-- Changelog:
+---- Works with infinity fuel
+---- Ability to set the navigation method using the module.navigationMethod (newMethod) function
+------ method is a function that should accept a table of coordinates as an argument and move it to specified location.
+------ Default method is the same, it's now called module.highwayNavigate (destination)
+------ Don't forget to use API movement functions to keep tracking the position of the turtle
+---- naviZones is now called naviData, and added the module.getNaviData function to get navigation data if you want to use it in your navigation method
+---- Ability to set the configuration of Ender Chests or disable each of them at all using module.setChests (newConfiguration)
+------ newCounfiguraton is a table with type of chest as key and slot as value. The API cares only about "Fuel" and "Stuff" fields.
+------ Set the field to nil to disable that chest. WARNING: Disable fuel chest only if you have infinite fuel.
+---- Fallback Location is now set by separate function module.setFallback (newFallbackLocation)
+
+-- A little change to standard assert function 
+_G.assert = function(condition, errMsg, level)
+	if not condition then
+		error(errMsg, (tonumber(level) or 1) + 1)
+	end
+	return condition
+end
+ 
+--[[
+*********************************************************************************************
+*                                    Communication Part                                     *
+*********************************************************************************************
+]]--
+-- There are some variables used for communication
+-- ID is the turtle's unique identifier
+-- Master is the ID of the master
+-- Channel is the channel used to send messages to Master
+-- Master should respond on channel+1
+-- Type is the type of the module. Used by Master to determine what it can do
+local ID = 0
+local Master = 0
+local channel = 100
+local Type = "default"
+
+function setType (newType)
+	assert (type(newType) == "string", "Bad module type: String required", 2)
+	Type = newType
+end
+
+-- Wee need a modem to communicate.
+local modem = peripheral.wrap ("right")
+
+-- The first function is used to parse a message received on modem
+-- It determines whether the message is valid or not
+-- Message should be a table with fields
+--  1) Protocol - must be equal to "KuuNet"
+--  2) ID - that must be equal to turtle's ID
+--  3) Master - that must be equal to Master variable.
+--  Some other fiels
+local function isValid (message)
+	if message ~= nil then
+		if message.Protocol ~= "KuuNet" then
+			return false
+		end
+		if message.ID ~= ID then
+			return false
+		end
+		if message.Master ~= Master then
+			return false
+		end
+			return true
+	else
+		return false
+	end
+end
+
+-- This function sends a request to Master and waits for a response.
+-- Request is just a simple string
+-- It returns response as message or nil
+function request (message, timeout)
+	assert (type(message) == "string", "Bad message: String required", 2)
+	assert (type(timeout) == "number", "Bad timeout: Number required", 2)
+	-- open a channel to listen for response
+	modem.open (channel+1)
+	-- Make a message
+	local request = {
+		Protocol = "KuuNet",
+		ID = ID,
+		Type = Type,
+		Master = Master,
+		Request = message
+	}
+	-- And send it!
+	modem.transmit (channel, channel+1, textutils.serialize(request))
+	local response = nil
+	-- Wait for a valid message as response until the timeout
+	parallel.waitForAny (
+		function ()
+			sleep (timeout)
+		end,
+			function ()
+				while true do
+				local _, _, _, _, textMessage = os.pullEvent("modem_message")
+				local msg = textutils.unserialize (textMessage)
+				if isValid(msg) then
+					response = msg
+					break
+				end
+			end
+		end
+	)
+	modem.close (channel+1)
+	return response
+end
+
+--[[
+*********************************************************************************************
+*                                    Navigation Part                                        *
+*********************************************************************************************
+]]--
+ 
+-- Navigation variables. 
+
+-- Location is a global table containing all the coordinates and facing direction of the turtle
+local location = {x = 0, y = 0, z = 0, f = 0}
+-- naviData is the table used to organize the navigation of the modules so they don't lock one another movement
+-- Details are explaind a bit later
+local naviData = {x = 0, z = 0, height = 0}
+
+-- This is the variable used to store the numbers of slots, where Ender Chests are located. Fuel chest is used to refuel the turtle, and 
+-- Stuff chest is used to dump all the stuff mined by turtle. You can switch it off simply by setting the corresponding field to nil
+local chests = {Fuel = 1, Stuff = 2}
+
+-- Here is the function to set the position of the turtle and another one to get it.
+function setPosition (newPosition)
+	assert (type(newPosition) == "table", "Bad position: Table required, got "..type(newPosition), 2)
+	for key, value in pairs(location) do
+		assert (type(value) == "number", "Bad coordinate "..key..": Number required, got "..type(value), 2)
+		location[key] = value
+	end
+end
+ 
+function getPosition ()
+	return {x = location.x,
+			y = location.y,
+			z = location.z,
+			f = location.f,} -- return a copy of the location table.
+end
+ 
+-- And a small function to print the position. For debug purposes
+function printPosition ()
+	print ("Currrent turtle position:")
+	print ("    x = "..location.x)
+	print ("    y = "..location.y)
+	print ("    z = "..location.z)
+	print ("    f = "..location.f)
+end
+
+-- A functions to set and get the navigation data.
+function setNaviData (newNaviData)
+	assert (type(newNaviData) == "table", "Bad navigation data: Table required, got "..type(newNaviData), 2)
+	naviData = newNaviData
+end
+function getNaviData ()
+	return naviData
+end
+
+-- A function to set the chest configuration 
+function setChests (newConfiguration)
+	assert (type(newConfiguration)=="table", "Bad chests configuration: Table required.", 2)
+	for chest, slot in pairs(newConfiguration) do
+		assert (type(slot) == "number" and slot > 0 and slot < 17, "Bad chest field "..chest.." : Not a slot number", 2)
+		chests [chest] = slot
+	end
+end
+
+-- Now let's move on to our navigation functions
+
+-- A simple turning function. tTurns is used to chech whether the argument is valid
+local tTurns = {left = true, right = true, around = true}
+function turn (direction)
+	assert (type(direction) == "string", "Bad direction. String required, got ".. type(direction), 2)
+	assert (tTurns[direction], "Bad turn direction. Turn directions are \"left\", \"right\" and \"around\", got "..direction, 2)
+    if direction == "left" then
+        turtle.turnLeft()
+        location.f = location.f - 1
+    elseif direction == "right" then
+        turtle.turnRight()
+        location.f = location.f + 1
+    elseif direction == "around" then
+        turtle.turnLeft()
+        turtle.turnLeft()
+        location.f = location.f - 2
+    end
+    location.f = (location.f + 4) % 4 -- This is used to handle the f < 0 and f > 3 situations
+    return true
+end
+ 
+-- This one is used to turn the turtle to specified f direction.
+-- A little bit of pony magic is used to calculate how should it turn
+function turnTo (face)
+	assert (type (face) == "number", "Bad f direction. Number required, got "..type (face), 2)
+	assert (face >= 0 and face < 4, "Bad f direction. Required integer between 0 and 3, got "..face, 2)
+    local diff = face - location.f
+    if math.abs(diff) == 2 then --this is true if the difference between f and face is 2 or -2, so it should turn around
+        return turn ("around")
+    elseif math.fmod(diff + 4, 4) ==  1 then    --this is true if the difference between f and face is 1
+            return turn ("right")                   --f = 0 and face = 3 is also satisfies the condition (-3 + 4 == 1)
+    elseif math.fmod(diff - 4, 4) == -1 then    --this is true if the difference between f and face is -1
+            return turn ("left")                    --f = 3 and face = 1 is also satisfies the condition ( 3 - 4 == 1)
+    end
+    return false    --returned if turtle is already faced the specified direction
+end
+ 
+-- This function is used to return actual x and z shifts
+-- These shifts are the numbers which you should add to the coordinates when turtle moves forward.
+-- I use a table to decode it since it is more compact and easier to read than lots of conditions
+local tShifts = {
+    [0] = { 1,  0},
+    [1] = { 0,  1},
+    [2] = {-1,  0},
+    [3] = { 0, -1},
+}
+local function fDirection ()
+    return unpack (tShifts[location.f])
+end
+ 
+-- This function is used to update the turtle location when it has moved
+local function updateLocation (direction)
+    if direction == "up" then
+        location.y = location.y + 1
+    elseif direction == "down" then
+        location.y = location.y - 1        
+    elseif direction == "forward" then
+        local xShift, zShift = fDirection ()
+        location.x = location.x + xShift        
+        location.z = location.z + zShift
+    end
+end
+ 
+-- This function helps us with our EnderChests if there is something that obstructs placement
+-- It checks what's going on on top of it, and if there is a turtle, it waits.
+local function forcePlaceUp ()
+	while not turtle.placeUp() do
+		if turtle.detectUp() then
+			if peripheral.isPresent ("top") and peripheral.getType ("top") == "turtle" then
+				print "Other turtle detected. Waiting..."
+				while peripheral.isPresent ("top") do
+					sleep (5)
+				end
+			end
+			turtle.digUp()
+		elseif turtle.attackUp() then
+			print "Attacking obstructing entity"
+		end
+	end
+end
+
+-- This function tries to refuel the turtle to make it have an <amount> of fuel
+-- If it can't, it waits
+-- It also returns true if fuel is infinity
+function checkFuel (amount)
+	assert (type(amount) == "number", "Bad fuel amount. Number required, got "..type(amount), 2)
+	local fuel = turtle.getFuelLevel() 
+	if fuel == "Infinity" or fuel > amount then
+		return true
+	else
+		turtle.select (chests.Fuel)
+		forcePlaceUp ()
+		turtle.suckUp ()
+		while true do
+			if not turtle.refuel (1) then
+				turtle.suckUp ()
+			end
+			if turtle.getFuelLevel () >= amount then
+				turtle.dropUp ()
+				turtle.digUp ()
+				turtle.select (1)
+				return true
+			end
+			sleep (1)
+		end
+	end
+end
+ 
+-- This function used to empty the turtle's inventory into the ender chest in the second slot
+-- Warning! Required a good sorting system able to empty the chest as quickly as possible!
+-- It does something only if chests.Stuff is set
+function dumpStuff ()
+	if chests.Stuff ~= nil then
+		turtle.select (chests.Stuff)
+		forcePlaceUp ()
+		for i = 1,16 do
+			if i ~= chests.Fuel and i ~= chests.Stuff then
+				while turtle.getItemCount (i) > 0 do
+					turtle.select (i)
+					turtle.dropUp ()
+				end
+			end
+		end
+		turtle.select (chests.Stuff)
+		turtle.digUp ()
+		turtle.select (1)
+	end
+end
+
+-- This function checks if there is any empty slots in inventory (basically, in 16th slot)
+function checkSpace ()
+    if turtle.getItemCount (16) > 0 then
+        dumpStuff ()
+    end
+end
+ 
+-- Advanced movement function.
+-- Again, I use a set of tables with all the movements and other "directional" turtle actions
+-- The fuction detects if there is a turtle in the direction it wants to move, and if there is one, it waits while it moves away.
+-- If it waits too long (60 seconds), however, it just eats that turtle
+tMove = {
+	forward = turtle.forward,
+	up = turtle.up,
+	down = turtle.down
+}
+tDetect = {
+	forward = turtle.detect,
+	up = turtle.detectUp,
+	down = turtle.detectDown
+}
+tDig = {
+	forward = turtle.dig,
+	up = turtle.digUp,
+	down = turtle.digDown
+}
+tAttack = {
+	forward = turtle.attack,
+	up = turtle.attackUp,
+	down = turtle.attackDown
+}
+tIsTurtle = {
+	forward = function ()
+		if peripheral.isPresent ("front") and peripheral.getType ("front") == "turtle" then
+			return true
+		end
+		return false
+	end,
+	up = function ()
+		if peripheral.isPresent ("top") and peripheral.getType ("top") == "turtle" then
+			return true
+		end
+		return false
+	end,
+	down = function ()
+		if peripheral.isPresent ("bottom") and peripheral.getType ("bottom") == "turtle" then
+			return true
+		end
+		return false
+	end
+}
+function move (direction)
+	assert (type(direction) == "string", "Bad move direction. String required, got "..type(direction), 2)
+	assert (tMove[direction], "Bad move direction. Move directions are \"up\", \"down\" and \"forward\", got"..direction, 2)
+	-- First, check whether we have fuel to move
+	if not checkFuel (1) then
+		return false
+	end
+	-- Second, try to move
+	while not tMove[direction]() do
+		-- If can't, check if there is a block
+		if tDetect[direction]() then
+			-- If it's a turtle, just wait while it moves away.
+			-- WARNING! This may cause turtle interlocks!
+			if tIsTurtle[direction]() then
+				print "Other turtle detected. Waiting..."
+				while tIsTurtle[direction]() do
+					sleep (5)
+				end
+			else
+			-- If it's not a turtle, try to dig that block
+				if tDig[direction]() then
+					checkSpace ()
+				-- If we can't - we just can't move.
+				else
+					print "Can't pass the obstruction!"
+					return false
+				end
+			end
+		-- If it's not a block, that's probably an entity, so we attack it!
+		elseif tAttack[direction]() then
+			checkSpace ()
+		end
+	end
+	-- If moved successfully, update the coordinates and return true
+	updateLocation (direction)
+	return true
+end
+ 
+-- This one is used to move turtle to specified f direction OR up/down <count times>
+function moveEx (direction, count)
+	assert (type(direction) == "number" or type(direction) == "string", "Bad direction. String or number required, got "..type(direction), 2)
+	assert (type(count) == "number", "Bad count. Positive number required, got "..type(count), 2)
+	assert (count > 0, "Bad count. Positive number required, got "..count, 2)
+	if type(direction) == "number" then
+		assert (direction >= 0 and direction < 4, "Bad direction. Numeric direction should be between 0 and 3, got "..direction)
+		turnTo (direction)
+		for i = 1, count do
+			move ("forward")
+		end
+	else
+		assert (direction == "up" or direction == "down", "Bad direction. String direction should either \"up\" or \"down\", got "..direction, 2)
+		for i = 1, count do
+			move (direction)
+		end
+	end
+end
+ 
+-- A height function. For convinience
+function height (value)
+	assert (type(value) == "number", "Bad value. Integer required, got "..type(value), 2)
+	assert (value % 1 == 0, "Bad value. Integer required, got "..value, 2)
+	local diff = value - location.y
+	checkFuel(math.abs(diff))
+	if diff > 0 then
+		moveEx ("up", diff)
+	elseif diff < 0 then
+		moveEx ("down", -diff)
+	end
+end
+ 
+-- Small goto function. It moves turtle in one axis.
+-- Example: module.gotoOne ("x", 10) moves the turtle to x = 10
+-- tCoordinates is used to check if the coordinate is valid
+local tCoordinates = {x = true, y = true, z = true}
+function gotoOne (coordinate, value)
+	assert (type(coordinate) == "string", "Bad coordinate. String required, got "..type(coordinate), 2)
+	assert (tCoordinates[coordinate], "Bad coordinate. Coordinates are \"x\", \"y\" and \"z\", got "..coordinate, 2)
+	assert (type(value) == "number", "Bad value. Integer required, got "..type(value), 2)
+	assert (value % 1 == 0, "Bad value. Integer required, got "..value, 2)
+	if coordinate == "y" then
+		height (value)
+	elseif coordinate == "x" then
+		local diff = value - location.x
+		checkFuel(math.abs(diff))
+		if diff > 0 then
+			moveEx (0, diff)
+		elseif diff < 0 then
+			moveEx (2, -diff)
+		end
+	elseif coordinate == "z" then
+		local diff = value - location.z
+		checkFuel(math.abs(diff))
+		if diff > 0 then
+			moveEx (1, diff)
+		elseif diff < 0 then
+			moveEx (3, -diff)
+		end
+	end
+end
+ 
+-- Let's organize our movement a bit to avoid movement deadlocks. Thanks to Doyle3694 for the idea
+-- It is 2D navigation, so height is not taken into account. It will allow turtles to relocate themselves to their mining positions
+-- without stucking.
+-- I'll divide all the 2D area to four zones. In each zone turtle can move only in two directions.
+-- Zones are determinated by the pair of coordinates. Turtles will move clockwise relative to the point with that coordinates
+-- height is the height at which all navigation is done
+ 
+-- There is a table used to determine to which directions turtle is allowed to move.
+-- Direction "first" is the direction turtle will move first ^_^ This one can't lead out of the zone.
+-- Direction "second" is leading to the next zone.
+-- Directions are the tables of coordinate and direction (+1 - positive, -1 - negative)
+local tZones = {
+	z1 = {first = {"x",  1}, second = {"z",  1}},
+	z2 = {first = {"z",  1}, second = {"x", -1}},
+	z3 = {first = {"x", -1}, second = {"z", -1}},
+	z4 = {first = {"z", -1}, second = {"x",  1}}
+}
+ 
+-- Here is a function to determine in which zone turtle is
+local function currentZone ()
+	if location.x > naviData.x then
+		if location.z > naviData.z then
+			return "z2"
+		else
+			return "z1"
+		end
+	else
+		if location.z > naviData.z then
+			return "z3"
+		else
+			return "z4"
+		end
+	end
+end
+ 
+-- And there is one used to navigate turtle, taking into account zones.
+-- All the navigation is done at naviData.height and then turtle changes it's height
+function highwayNavigate (destination)
+	-- check destination
+	assert (type(destination) == "table", "Bad destination. Table required, got "..type(destination), 2)
+	local tCoordinates = {"x", "y", "z", "f"}
+	for i, coordinate in ipairs (tCoordinates) do
+		assert (type(destination[coordinate]) == "number", "Bad destination parameter: "..coordinate..". Integer required, got "..type(destination[coordinate]), 2)
+		assert (destination[coordinate] % 1 == 0, "Bad destination parameter: "..coordinate..". Integer required, got "..destination[coordinate], 2)
+	end
+	-- check navigation data
+	for key, value in pairs (naviData) do
+		assert (type(value) == "number", "Bad navigation parameter: "..key..". Number required, got "..type(value), 2)
+		assert (value % 1 == 0, "Bad navigation parameter: "..key..". Integer required, got "..value, 2)
+	end
+	-- go to naviData.height only if we need to move
+	if destination.x ~= location.x or destination.z ~= location.z then
+		height (naviData.height)
+	end
+	while location.x ~= destination.x or location.z ~= destination.z do -- navigate between zones until we are in the place
+		local zone = currentZone ()
+		-- Let's unpack all the coordinates
+		local coordinateFirst, directionFirst = unpack (tZones[zone].first)  
+		local coordinateSecond, directionSecond = unpack (tZones[zone].second)
+		-- And check some things
+		-- if we are allowed to move at both directions - just do it!
+		if (destination[coordinateFirst]-location[coordinateFirst]) * directionFirst >= 0
+			and (destination[coordinateSecond]-location[coordinateSecond]) * directionSecond >= 0 then
+			-- BTW, we just check there that coordinate difference and destination has the same sign
+			-- Otherwise turtle that is already went to "second" coordinate won't be able to change it's "first" coordinate
+			-- Then just use gotoOne to go to the desired location
+			gotoOne (coordinateFirst, destination[coordinateFirst])            
+			gotoOne (coordinateSecond, destination[coordinateSecond])            
+		else
+			-- If we are not allowed to move by any of those coordinates in current zone
+			-- Just head up to the second zone
+			local nextPosition = naviData[coordinateSecond]
+			-- We need to do that for actually leave z1 and z4 since they are one block bigger
+			if zone == "z4" or zone == "z1" then
+				nextPosition = nextPosition + 1
+			end
+			-- go to the next zone!                
+			gotoOne (coordinateSecond, nextPosition)
+		end        
+	end
+	height(destination.y)
+	turnTo(destination.f)
+end
+
+-- This function is used to actually navigate the turtle. By default it is set to Highway Navigation, but user may set it to other function
+-- It's just have to receive a location-like table with 4 coordinates and move turtle.
+navigateTo = highwayNavigate
+
+function navigationMethod (newMethod)
+	navigateTo = newMethod
+end
+
+--[[
+*********************************************************************************************
+*                                     Operation part                                        *
+*********************************************************************************************
+]]--
+-- Fallback location is the point where module goes if it can't get a task from Master
+local fallbackLocation = nil
+function setFallback (newFallbackLocation)
+	fallbackLocation = newFallbackLocation
+end
+ 
+-- We need to read all the data we need to move around - turtle's position and navigation zones
+-- "initdata" is the file created by Master and containing all the data that's similar for each module placed by that Master
+function init ()
+	local file = fs.open ("/disk/initdata", "r")
+	local communicationData = textutils.unserialize (file.readLine ())
+	Master = communicationData.MasterID
+	channel = communicationData.channel
+	-- set module's location
+	location = textutils.unserialize (file.readLine ())
+	-- set navigation data
+	naviData = textutils.unserialize (file.readLine ())
+
+	-- Then send a request to Master, to get our ID and to let Master remember us in its state table for modules
+	local response = request ("Master", 5)
+	ID = response.NewID
+end
+ 
+-- Here is the task table. It is the table, that contains all the task module can get form Master and associated functions
+-- The table should be filled by user of this API ^_~
+-- Module operation is
+--  1) Requesting a task from master
+--  2) Moving to the location specified in response (if present)
+--  3) Executing the associated function
+-- There is always a default task "return" which returns module to Master.
+-- response from Master is always passed to the function, so, if it contains additional data, you can use it
+-- Return is a task to return. Master should pass a xet of coordinates as well as "f" direction to make module face the Master.
+tTasks = {
+	Return = function (response)
+		move ("forward")
+		request ("Returned", 3)
+		sleep (30)
+	end
+}
+ 
+-- Function to add tasks to the task table
+function addTasks (taskTable)
+	assert (type(taskTable) == "table", "Bad task table. Table required, got "..type(taskTable), 2)
+	for key, value in pairs (taskTable) do
+		assert (type(key) == "string", "Bad task. String required, got "..type(key), 2)
+		assert (type(value) == "function", "Bad task function. Function required, got "..type(value), 2)
+		tTasks[key] = value
+	end
+end
+ 
+-- And one to remove a task ^_^
+function rmTask (task)
+	assert (type(task) == "string", "Bad task. String required, got "..type(task), 2)
+	tTasks [task] = nil
+end
+ 
+-- And a main operation function
+function operate ()
+	move ("forward")
+	while true do
+		local task
+		-- failedRequests indicates how many times Master didn't answered to request
+		local failedRequests = 0
+		while task == nil do
+			task = request ("Task", 5)
+			if task == nil then
+				failedRequests = failedRequests + 1
+				-- if there are 6 requests failed, and fallbackLocation is set then change position to fallback position
+				if failedRequests >= 6 and fallbackLocation ~= nil then
+					print "No response from Master after 6 attempts. Moving to fallback position..."
+					navigateTo (fallbackLocation)
+				end
+			end
+		end
+		if task.x ~= nil and task.z ~= nil then
+			navigateTo (task)
+		end
+		tTasks [task.Task](task) -- Task. tttTask. Tasktask. taskataskatask. HerpDerp.
+	end
+end
