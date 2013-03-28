@@ -52,28 +52,19 @@ local modem = peripheral.wrap ("right")
 --  3) Master - that must be equal to Master variable.
 --  Some other fiels
 local function isValid (message)
-	if message ~= nil then
-		if message.Protocol ~= "KuuNet" then
-			return false
-		end
-		if message.ID ~= ID then
-			return false
-		end
-		if message.Master ~= Master then
-			return false
-		end
-			return true
-	else
-		return false
-	end
+	return  message ~= nil and
+			type(message) == "table" and
+			message.Protocol == "KuuNet" and
+			message.ID == ID and
+			message.Master == Master
 end
 
 -- This function sends a request to Master and waits for a response.
 -- Request is just a simple string
 -- It returns response as message or nil
 function request (message, timeout)
-	assert (type(message) == "string", "Bad message: String required", 2)
-	assert (type(timeout) == "number", "Bad timeout: Number required", 2)
+	assert (type(message) == "string", "Bad message: String required, got "..type(message), 2)
+	assert (type(timeout) == "number", "Bad timeout: Number required, got "..type(timeout), 2)
 	-- open a channel to listen for response
 	modem.open (channel+1)
 	-- Make a message
@@ -161,7 +152,7 @@ end
 
 -- A function to set the chest configuration 
 function setChests (newConfiguration)
-	assert (type(newConfiguration)=="table", "Bad chests configuration: Table required.", 2)
+	assert (type(newConfiguration) == "table", "Bad chests configuration: Table required, got "..type(newConfiguration), 2)
 	for chest, slot in pairs(newConfiguration) do
 		assert (type(slot) == "number" and slot > 0 and slot < 17, "Bad chest field "..chest.." : Not a slot number", 2)
 		chests [chest] = slot

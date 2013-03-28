@@ -34,38 +34,28 @@ local modem = peripheral.wrap ("right")
 --  4) Type - the type of the module. Used to know how to handle its task requests
 --  Some other fields
 local function isValid (message)
-	if message ~= nil then
-		if message.Protocol ~= "KuuNet" then
-			return false
-		end
-		if message.ID == nil then
-			return false
-		end
-		if message.Master ~= MasterID then
-			return false
-		end
-		return true
-	else
-		return false
-	end
+	return  message ~= nil and
+			type(message) == "table" and
+			message.Protocol == "KuuNet" and
+			message.ID ~= nil and
+			message.Master == MasterID
 end
  
 -- The function that listens for a valid message and returns it
 function listen ()
-	while true do
+	local msg
+	while not isValid(msg) do
 		local _, _, _, _, text_message = os.pullEvent("modem_message")
-		local msg = textutils.unserialize (text_message)
-		if isValid(msg) then
-			return msg
-		end
+		msg = textutils.unserialize (text_message)
 	end
+	return msg
 end
  
 -- And a function to send a response
 function response (ID, chan, message)
-	assert (type(ID) == "number", "Bad module ID: Number required.", 2)
-	assert (type(chan) == "number", "Bad channel: Number required", 2)
-	assert (type(message) == "table", "Bad message: Table required", 2)
+	assert (type(ID) == "number", "Bad module ID: Number required, got "..type(ID), 2)
+	assert (type(chan) == "number", "Bad channel: Number required, got "..type(chan), 2)
+	assert (type(message) == "table", "Bad message: Table required, got "..type(message), 2)
 	message.Protocol = "KuuNet"
 	message.ID = ID
 	message.Master = MasterID
@@ -203,7 +193,7 @@ end
 -- Master stops when there are to active modules and stateFunction returns false.
 -- State function can do other things, such as reinitialization to a new module script and so on, but it shouldn't take too much time to execute
 function operate (stateFunction)
-	assert (type(stateFunction) == "function", "Bad state function: Function required", 2)
+	assert (type(stateFunction) == "function", "Bad state function: Function required, got "..type(stateFunction), 2)
 	local server = function ()
 		while stateFunction() or moduleCount > 0 do
 			local request = listen ()
@@ -257,10 +247,6 @@ local function refuel (amount)
 			end
 		end
 	end
-	turtle.dropUp ()
-	turtle.select (equipment.Fuel)
-	turtle.digUp ()
-	return false
 end
  
 local tMoves = {
@@ -277,8 +263,8 @@ end
  
 -- The function to set the "task" function for the said module type
 function setType (Type, taskFunction)
-	assert (type(Type) == "string", "Bad module type: String required.", 2)
-	assert (type(taskFunction) == "function", "Bad task function: Function required", 2)
+	assert (type(Type) == "string", "Bad module type: String required, got "..type(Type), 2)
+	assert (type(taskFunction) == "function", "Bad task function: Function required, got "..type(taskFunction), 2)
 	tTasks[Type] = taskFunction
 end
  
@@ -286,8 +272,8 @@ end
 -- Filename is the name of module's script. It will be copied on the disk drive
 function init (filename, ID, mainChannel, moduleCount)
 	assert (fs.exists(filename), "Module script \""..filename.."\" does not exist.", 2)
-	assert (ID, "Master ID is not set.", 2)
-	assert (type(mainChannel) == "number", "Bad channel: Number required", 2)
+	assert (type(ID) == "string" or type(ID) == "number" , "Bad Master ID: String or number required, got "..type(ID), 2)
+	assert (type(mainChannel) == "number", "Bad channel: Number required, got "..type(mainChannel), 2)
 	assert (type(moduleCount) == "number" and moduleCount > 0, "Bad module count: Positive number required.", 2)
 	
 	-- Set the ID of the Master
