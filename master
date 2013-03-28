@@ -268,6 +268,37 @@ function setType (Type, taskFunction)
 	tTasks[Type] = taskFunction
 end
  
+
+-- This function is used to make all the files required by module to run.
+-- Scriptname is the name of the main module script
+local function prepareFiles (scriptname)
+	-- Copy all the required files on the disk
+	if fs.exists ("/disk/module") then
+		fs.delete ("/disk/module")
+	end
+	fs.copy ("module", "/disk/module")
+	if fs.exists ("/disk/"..scriptname) then
+		fs.delete ("/disk/"..scriptname)
+	end
+	fs.copy (scriptname, "/disk/"..scriptname)
+	-- Make a startup file for modules
+	local file = fs.open ("/disk/startup", "w")
+	file.writeLine ("shell.run(\"copy\", \"/disk/module\", \"/module\")")
+	file.writeLine ("shell.run(\"copy\", \"/disk/"..scriptname.."\", \""..scriptname.."\")")
+	file.writeLine ("shell.run(\""..scriptname.."\")")
+	file.close()
+   
+	-- Now, make a file with all the data modules need
+	file = fs.open ("/disk/initdata", "w")
+	-- Communication data: master ID and communication channel
+	file.writeLine (textutils.serialize ({MasterID = MasterID, channel = channel}) )
+	-- Location data:
+	file.writeLine (textutils.serialize (modPosition))
+	-- Navigation data:
+	file.writeLine (textutils.serialize (naviData))
+	file.close()
+end
+ 
 -- The initialization function of the master.
 -- Filename is the name of module's script. It will be copied on the disk drive
 function init (filename, ID, mainChannel, moduleCount)
@@ -321,32 +352,8 @@ function init (filename, ID, mainChannel, moduleCount)
 	Position = {x = x, y = y, z = z, f = f}
 	modPosition = {x = newX, y = y, z = newZ, f = f}
    
-	-- Copy all the required files on the disk
-	if fs.exists ("/disk/module") then
-		fs.delete ("/disk/module")
-	end
-	fs.copy ("module", "/disk/module")
-	if fs.exists ("/disk/"..filename) then
-		fs.delete ("/disk/"..filename)
-	end
-	fs.copy (filename, "/disk/"..filename)
-	-- Make a startup file for modules
-	local file = fs.open ("/disk/startup", "w")
-	file.writeLine ("shell.run(\"copy\", \"/disk/module\", \"/module\")")
-	file.writeLine ("shell.run(\"copy\", \"/disk/"..filename.."\", \""..filename.."\")")
-	file.writeLine ("shell.run(\""..filename.."\")")
-	file.close()
-   
-	-- Now, make a file with all the data modules need
-	file = fs.open ("/disk/initdata", "w")
-	-- Communication data: master ID and communication channel
-	file.writeLine (textutils.serialize ({MasterID = MasterID, channel = channel}) )
-	-- Location data:
-	file.writeLine (textutils.serialize (modPosition))
-	-- Navigation data:
-	file.writeLine (textutils.serialize (naviData))
-	file.close()
-   
+	-- Make all the file required
+	prepareFiles (filename)
 	-- And go back to initial location
 	forceMove ("back")
    
@@ -418,40 +425,14 @@ function setState (ID, newState)
 end
 
 -- reinit function is just a simplified init, that doesn't update channel, MasterID and Master's position. Use it to change the modules script
- function reinit (filename, moduleCount)
- 	assert (fs.exists(filename), "Module script \""..filename.."\" does not exist.", 2)
+function reinit (filename, moduleCount)
+	assert (fs.exists(filename), "Module script \""..filename.."\" does not exist.", 2)
 	assert (type(moduleCount) == "number" and moduleCount > 0, "Bad module count: Positive number required.", 2)
-    forceMove ("forward")
-	-- Copy all the required files on the disk
-	if fs.exists ("/disk/module") then
-		fs.delete ("/disk/module")
-	end
-	fs.copy ("module", "/disk/module")
-	if fs.exists ("/disk/"..filename) then
-		fs.delete ("/disk/"..filename)
-	end
-	fs.copy (filename, "/disk/"..filename)
-	-- Make a startup file for modules
-	local file = fs.open ("/disk/startup", "w")
-	file.writeLine ("shell.run(\"copy\", \"/disk/module\", \"/module\")")
-	file.writeLine ("shell.run(\"copy\", \"/disk/"..filename.."\", \""..filename.."\")")
-	file.writeLine ("shell.run(\""..filename.."\")")
-	file.close()
-   
-	-- Now, make a file with all the data modules need
-	file = fs.open ("/disk/initdata", "w")
-	-- Communication data: master ID and communication channel
-	file.writeLine (textutils.serialize ({MasterID = MasterID, channel = channel}) )
-	-- Location data:
-	file.writeLine (textutils.serialize (modPosition))
-	-- Navigation data:
-	file.writeLine (textutils.serialize (naviData))
-	file.close()
-   
-	-- And go back to initial location
+	-- Prepare the files on disk
+	forceMove ("forward")
+	prepareFiles (filename)
 	forceMove ("back")
-   
-	-- Set the amount of modules needed. I use "+" because one can run init again to add a different type of module to the operation
+    -- Set the amount of modules needed.
 	needModules = needModules + moduleCount
 	-- Open the channel to listen for requests
 	modem.open (channel)
