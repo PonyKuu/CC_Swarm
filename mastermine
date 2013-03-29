@@ -5,18 +5,18 @@
 
 -- A little change to standard assert function 
 _G.assert = function(condition, errMsg, level)
-  if not condition then
+	if not condition then
         error(errMsg, (tonumber(level) or 1) + 1)
-  end
-  return condition
+	end
+	return condition
 end
  
 os.loadAPI ("master")
  
 local tArgs = {...}
  
-if #tArgs ~= 5 then
-	print ("Usage: mastermine <xstart> <ystart> <zstart> <xsize> <zsize>")
+if #tArgs ~= 6 then
+	print ("Usage: mastermine <xstart> <ystart> <zstart> <xsize> <ysize> <zsize>")
 	return
 end
  
@@ -26,20 +26,18 @@ local mineLocations = {}
 -- convert all the coordinates into numbers 
 for index, value in ipairs (tArgs) do
 	tArgs[index] = tonumber (value)
-	assert (type(tArgs[index] == "number", "Usage: mastermine <xstart> <ystart> <zstart> <xsize> <zsize>", -1))
+	assert (type(tArgs[index] == "number", "Usage: mastermine <xstart> <ystart> <zstart> <ysize> <xsize> <zsize>", -1))
 end
 
-local xstart, ystart, zstart, xsize, zsize = unpack (tArgs)
-for i = 0, xsize/4 - 1 do
-	for j = 0, zsize/4 - 1 do
-		local x = xstart + i*4
-		local z = zstart + j*4
-		table.insert (mineLocations, {x = x, y = ystart, z = z, f = 0})
+local xstart, ystart, zstart, xsize, ysize, zsize = unpack (tArgs)
+	for j = 0, zsize - 1 do
+		local z = zstart + j
+		table.insert (mineLocations, {x = xstart, y = ystart, z = z, f = 0})
 	end
 end
  
 -- Calculate the navigation zones. The point that divides area into zones is in the middle of the mining area.
-local naviX = xstart + xsize/2
+local naviX = xstart
 local naviZ = zstart + zsize/2
 local naviHeight = ystart + 2
 master.setNavigation {x = naviX, z = naviZ, height = naviHeight}
@@ -56,7 +54,7 @@ local function mineMachine (ID)
 		-- Some debug output
 		print ("Module ", ID, " is mining at {", nextLocation.x, " ,", nextLocation.y, " ,", nextLocation.z, "}")
 		-- And make a task to mine that location
-		return master.makeTask ("Mine", nextLocation, {holeSize = 4})
+		return master.makeTask ("Mine", nextLocation, {length = xsize, depth = ysize})
 	else
 		-- No locations. Return home.
 		master.setState(ID, "Returning")

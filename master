@@ -190,12 +190,20 @@ end
  
 -- The main operation function
 -- stateFunction is the function used to determine when master should stop.
--- Master stops when there are to active modules and stateFunction returns false.
+-- Master stops when there are no active modules and stateFunction returns false.
 -- State function can do other things, such as reinitialization to a new module script and so on, but it shouldn't take too much time to execute
 function operate (stateFunction)
 	assert (type(stateFunction) == "function", "Bad state function: Function required, got "..type(stateFunction), 2)
 	local server = function ()
-		while stateFunction() or moduleCount > 0 do
+		-- run is used to determine whether master should run.
+		local run = stateFunction ()
+		while run or moduleCount > 0 do
+			-- check our state function
+			run = stateFunction()
+			-- If state function returns false, then stop placing modules
+			if isPlacing and not run then
+				isPlacing = false
+			end
 			local request = listen ()
 			tRequests[request.Request](request) -- Just execute the request handler.
 		end
@@ -303,6 +311,7 @@ end
 -- Filename is the name of module's script. It will be copied on the disk drive
 function init (filename, ID, mainChannel, moduleCount)
 	assert (fs.exists(filename), "Module script \""..filename.."\" does not exist.", 2)
+	assert (fs.exists("module"), "Module API is required.", 2)
 	assert (type(ID) == "string" or type(ID) == "number" , "Bad Master ID: String or number required, got "..type(ID), 2)
 	assert (type(mainChannel) == "number", "Bad channel: Number required, got "..type(mainChannel), 2)
 	assert (type(moduleCount) == "number" and moduleCount > 0, "Bad module count: Positive number required.", 2)
