@@ -71,11 +71,7 @@ master.setType("Miner", mineMachine)
 master.init("modulemine", 100, 1000, #mineLocations)
  
 local function stateFunction ()
-	if #mineLocations > 0 then
-		return true
-	else
-		return false
-	end
+	return #mineLocations > 0
 end
 master.operate (stateFunction)
 print "Mining finished! Have a nice day!"
