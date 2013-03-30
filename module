@@ -259,6 +259,10 @@ function checkFuel (amount)
 			end
 			if turtle.getFuelLevel () >= amount then
 				turtle.dropUp ()
+				-- If it can't drop all the fuel into chest, just consume it all
+				if turtle.getItemCount (chests.Fuel) then
+					turtle.refuel ()
+				end
 				turtle.digUp ()
 				turtle.select (1)
 				return true
