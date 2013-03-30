@@ -2,13 +2,23 @@
  
 os.loadAPI ("module")
 
--- this function is used to carefuly move forward, digging the blocks below and above the module and not trap it under bedrock
+-- this function is used to carefuly move forward, digging the blocks below and above the module and not trap itself under bedrock
 local function safeForward ()
-	local success = false
-	while not success do
+	-- this variable stores how many times turtle ascended
+	local ascended = 0
+	while true do
 		-- If there is bedrock in front of turtle, move up
 		if not module.move("forward") then
-			module.move ("up")
+			if not module.move ("up") then
+				module.turn ("around")
+				module.move ("forward")
+				module.move ("up")
+				module.move ("up")
+				module.turn ("around")
+				ascended = ascended + 2
+			else
+				ascended = ascended + 1
+			end
 		-- If turtle was trapped under the bedrock, go back, move up twice, and try again
 		elseif turtle.detectUp () and not turtle.digUp () then
 			module.turn ("around")
@@ -16,65 +26,88 @@ local function safeForward ()
 			module.move ("up")
 			module.move ("up")
 			module.turn ("around")
+			ascended = ascended + 2
 		else
 			module.checkSpace ()
 			turtle.digDown ()
 			module.checkSpace ()
-			success = true
+			return ascended
 		end
 	end
 end
 
 -- this function is used to move up or down, while digging a 2x1 hole.
+-- it returns the actual number of blocks it moved
 local function column (direction, length)
-	for i = 1, length-2 do
+	turtle.dig ()
+	module.checkSpace ()
+	for i = 1, length-1 do
+		if not (module.move (direction)) then
+			return i
+		end
 		turtle.dig ()
 		module.checkSpace ()
-		if not (module.move (direction)) then
-			break
-		end
 	end
-	module.tDig[direction]()
-	module.checkSpace ()
+	return length
 end
 
 -- this is the main mining function
 local function slice (length, depth)
-	-- remember the y coordinate
-	local returnY = module.getPosition().y
-	-- Let's go down to the required depth.
-	column ("down", depth)
-	
-	-- If length is too small, we can avoid zigzagging back and forth
-	-- if it is 3 or 4 we can move two or three times, turn around and go up.
-	if length <= 4 then
-		for i = 1, length-1 do
-			safeForward ()
+	-- if length is 2, 3, or 4, then use columns to make that hole
+	if length < 5 then
+		local realDepth = column ("down", depth)
+		local ascended = 0
+		for i = 1, length - 2 do
+			ascended = ascended + safeForward ()
 		end
-		module.turn ("around")
-		column ("up", returnY - module.getPosition().y)
-	-- If length is 5 or more, start making some zig-zags
+		column ("up", realDepth - ascended)
+		module.dumpStuff ()
+	-- if length is 5 or more, just use plain old zig-zags
 	else
-		while module.getPosition().y < returnY do
-			turtle.digUp()
-			module.checkSpace()
+		-- a small function which tries to dig a 1x3xlength line
+		-- it returns how much time module ascended during that line
+		local function makeLine ()
+			-- this variable is used to remember how much times module ascended while moving forward
+			local ascended = 0
+			-- at the begining of the line dig down
+			turtle.digDown ()
+			module.checkSpace ()
 			for i = 1, length-1 do
-				safeForward()
+				-- try to move down if that number is greater than zero
+				if ascended > 0 and module.move("down") then
+					ascended = ascended - 1
+				end
+				ascended = ascended + safeForward ()
 			end
+			return ascended
+		end
+
+		-- this variable is used to determine when module should stop mining
+		local finish = false
+		local currentDepth = 0
+		while not finish do
+			currentDepth = currentDepth - makeLine ()
 			module.turn ("around")
 			for i = 1, 3 do 
-				module.move ("up")
+				-- if module is deep enough or cannot move down, stop
+				if currentDepth < depth - 1 and module.move ("down") then
+					currentDepth = currentDepth + 1
+				else
+					finish = true
+					break
+				end
 			end
 		end
-		-- finish the line
-		turtle.digUp()
-		module.checkSpace()
-		for i = 1, length-1 do
-			safeForward()
+		-- make the last line and remember how much times module have ascended
+		local ascended = makeLine ()
+		-- dump stuff and go up!
+		module.dumpStuff ()
+		for i = ascended, currentDepth - 1 do
+			module.move ("up")
 		end
 	end
 end
- 
+
 -- set up our Mine task
 module.addTasks {
 	Mine = function (response)
