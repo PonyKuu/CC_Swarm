@@ -28,33 +28,37 @@ end
 
 -- this one is splits the area to two areas. axis is the axis that would be split
 local function splitArea (start, dimensions, axis)
+	assert (type(start) == "table", "Bad starting coordinates: Table required, got "..type(start), 2)
+	assert (type(dimensions) == "table", "Bad quarry dimensions: Table required, got "..type(dimensions), 2)
+	assert (type(axis) == "string", "Bad axis: String required, got "..type(axis), 2)
 	-- a little function to copy a table
 	local function tCopy (tTable)
 		local newTable = {}
 		for k, v in pairs (tTable) do
 			newTable[k] = v
 		end
+		return newTable
 	end
 	-- make two copies of each table and change the corresponding fields.
-	startOne = tCopy (start)
-	dimensionsOne = tCopy (dimensions)
+	local startOne = tCopy (start)
+	local dimensionsOne = tCopy (dimensions)
 	dimensionsOne[axis] = math.floor(dimensions[axis]/2)
 
-	startTwo = tCopy (start)
+	local startTwo = tCopy (start)
 	startTwo[axis] = start[axis] + math.floor(dimensions[axis]/2)
-	dimensionsTwo = tCopy (dimensions)
+	local dimensionsTwo = tCopy (dimensions)
 	dimensionsTwo[axis] = math.ceil(dimensions[axis]/2)
 	
 	return startOne, dimensionsOne, startTwo, dimensionsTwo
 end
 
--- This one tries to distribute all the available modules. Minimum slice length is 4
+-- This one tries to distribute all the available modules. Minimum slice length is 8
 local function distribute (start, dimensions, moduleCount, taskTable)
 	-- if we can pack all the modules in one layer, just do it!
-	if moduleCount < dimensions.x or moduleCount < dimensions.z then
+	if moduleCount <= dimensions.x or moduleCount <= dimensions.z then
 		plainDistribution (start, dimensions, taskTable)
 	-- Also use plain distribution if quarry is less than 8x8
-	elseif dimensions.x < 8 and dimensions.z < 8 then
+	elseif dimensions.x <= 8 and dimensions.z <= 8 then
 		plainDistribution (start, dimensions, taskTable)
 	-- in any other case, divide the area into two pieces and call distribute again
 	-- division is done by the longest dimension
@@ -115,7 +119,7 @@ master.setNavigation {x = naviX, z = naviZ, height = naviHeight}
 -- set up a table with all the mining tasks
 local mineTasks = {}
 -- Distribute all the modules
-distribute (quarryStart, quarryDimensions, mineTasks)
+distribute (quarryStart, quarryDimensions, modules, mineTasks)
 
 local function mineMachine (ID)
 	-- If there are tasks in the task table

@@ -231,7 +231,7 @@ local function forcePlaceUp ()
 			if peripheral.isPresent ("top") and peripheral.getType ("top") == "turtle" then
 				print "Other turtle detected. Waiting..."
 				while peripheral.isPresent ("top") do
-					sleep (5)
+					sleep (2)
 				end
 			end
 			turtle.digUp()
@@ -360,7 +360,7 @@ function move (direction)
 			if tIsTurtle[direction]() then
 				print "Other turtle detected. Waiting..."
 				while tIsTurtle[direction]() do
-					sleep (5)
+					sleep (2)
 				end
 			else
 			-- If it's not a turtle, try to dig that block
