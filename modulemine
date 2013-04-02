@@ -51,6 +51,26 @@ local function column (direction, length)
 	return length
 end
 
+-- a small function which tries to dig a 1x3xlength line
+-- it returns how much time module ascended during that line
+local function makeLine (length)
+	-- this variable is used to remember how much times module ascended while moving forward
+	local ascended = 0
+	-- at the begining of the line dig down
+	turtle.digDown ()
+	module.checkSpace ()
+	-- check if module has the amount of fuel to move for 2xlength times, so it won't stuck under bedrock without being able to place the chest
+	module.checkFuel (2*length)
+	for i = 1, length-1 do
+		-- try to move down if ascended is greater than zero
+		if ascended > 0 and module.move("down") then
+			ascended = ascended - 1
+		end
+		ascended = ascended + safeForward ()
+	end
+	return ascended
+end
+
 -- this is the main mining function
 local function slice (length, depth)
 	-- if length is 2, 3, or 4, then use columns to make that hole
@@ -64,29 +84,11 @@ local function slice (length, depth)
 		module.dumpStuff ()
 	-- if length is 5 or more, just use plain old zig-zags
 	else
-		-- a small function which tries to dig a 1x3xlength line
-		-- it returns how much time module ascended during that line
-		local function makeLine ()
-			-- this variable is used to remember how much times module ascended while moving forward
-			local ascended = 0
-			-- at the begining of the line dig down
-			turtle.digDown ()
-			module.checkSpace ()
-			for i = 1, length-1 do
-				-- try to move down if that number is greater than zero
-				if ascended > 0 and module.move("down") then
-					ascended = ascended - 1
-				end
-				ascended = ascended + safeForward ()
-			end
-			return ascended
-		end
-
 		-- this variable is used to determine when module should stop mining
 		local finish = false
 		local currentDepth = 0
 		while not finish do
-			currentDepth = currentDepth - makeLine ()
+			currentDepth = currentDepth - makeLine (length)
 			module.turn ("around")
 			for i = 1, 3 do 
 				-- if module is deep enough or cannot move down, stop
@@ -99,7 +101,7 @@ local function slice (length, depth)
 			end
 		end
 		-- make the last line and remember how much times module have ascended
-		local ascended = makeLine ()
+		local ascended = makeLine (length)
 		-- dump stuff and go up!
 		module.dumpStuff ()
 		for i = ascended, currentDepth - 1 do

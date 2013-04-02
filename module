@@ -533,6 +533,7 @@ end
 navigateTo = highwayNavigate
 
 function navigationMethod (newMethod)
+	assert (type(newMethod) == "function", "Bad navigation method: Function required, got "..type(newMethod), 2)
 	navigateTo = newMethod
 end
 
@@ -572,7 +573,7 @@ end
 --  3) Executing the associated function
 -- There is always a default task "return" which returns module to Master.
 -- response from Master is always passed to the function, so, if it contains additional data, you can use it
--- Return is a task to return. Master should pass a xet of coordinates as well as "f" direction to make module face the Master.
+-- Return is a task to return. Master should pass a set of coordinates as well as "f" direction to make module face the Master.
 tTasks = {
 	Return = function (response)
 		dumpStuff ()
