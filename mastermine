@@ -52,13 +52,13 @@ local function splitArea (start, dimensions, axis)
 	return startOne, dimensionsOne, startTwo, dimensionsTwo
 end
 
--- This one tries to distribute all the available modules. Minimum slice length is 8
+-- This one tries to distribute all the available modules. Minimum slice length is 5
 local function distribute (start, dimensions, moduleCount, taskTable)
 	-- if we can pack all the modules in one layer, just do it!
 	if moduleCount <= dimensions.x or moduleCount <= dimensions.z then
 		plainDistribution (start, dimensions, taskTable)
 	-- Also use plain distribution if quarry is less than 8x8
-	elseif dimensions.x <= 8 and dimensions.z <= 8 then
+	elseif dimensions.x <= 10 and dimensions.z <= 10 then
 		plainDistribution (start, dimensions, taskTable)
 	-- in any other case, divide the area into two pieces and call distribute again
 	-- division is done by the longest dimension

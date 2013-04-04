@@ -22,13 +22,12 @@ local function safeForward ()
 				-- move back until we'll be able to move up
 				while not module.move ("up") do
 					--if we can't move forward, move down
-					if not module.move ("forward") then
+					while not module.move ("forward") do
 						module.move ("down")
 						ascended = ascended - 1
-					else
-						-- increment the counter each time we move back
-						timesForward = timesForward + 1
 					end
+					-- increment the counter each time we move back
+					timesForward = timesForward + 1
 				end
 				-- increment ascended variable if module succeeded to move up
 				ascended = ascended + 1
@@ -78,11 +77,15 @@ local function makeLine (length)
 	-- check if module has the amount of fuel to move for 2xlength times, so it won't stuck under bedrock without being able to place the chest
 	module.checkFuel (2*length)
 	for i = 1, length-1 do
+		local newAscended, bedrock = safeForward ()
+		-- update ascended variable
+		ascended = ascended + newAscended
+		-- update bedrock flag, using boolean pony magic
+		hitBedrock = hitBedrock or bedrock
 		-- try to move down if ascended is greater than zero
 		while ascended > 0 and module.move("down") do
 			ascended = ascended - 1
 		end
-		ascended, hitBedrock = safeForward ()
 	end
 	return ascended, hitBedrock
 end
@@ -112,7 +115,7 @@ local function slice (length, depth)
 			module.turn ("around")
 			for i = 1, 3 do 
 				-- if module is deep enough or cannot move down, stop
-				if currentDepth < depth - 1 and module.move ("down") then
+				if not finish and currentDepth < depth - 1 and module.move ("down") then
 					currentDepth = currentDepth + 1
 				else
 					finish = true
