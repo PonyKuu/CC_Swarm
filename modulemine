@@ -3,41 +3,55 @@
 os.loadAPI ("module")
 
 -- this function is used to carefuly move forward, digging the blocks below and above the module and not trap itself under bedrock
+-- it returns how many times it has ascended and a boolean which is true if module was maneuvering around bedrock.
 local function safeForward ()
 	-- this variable stores how many times turtle ascended
 	local ascended = 0
-	while true do
-		-- If there is bedrock in front of turtle, move up
+	-- this one stores how many times it should move forward
+	local timesForward = 1
+	-- this one is true if module was interacting with bedrock
+	local hitBedrock = false
+	while timesForward > 0 do
+		-- try to move forward
 		if not module.move("forward") then
+			-- if failed, try to move up. And that means that we hit bedrock!
+			hitBedrock = true
 			if not module.move ("up") then
+				-- if failed to move up, we are in serious trouble. Turn around and try to find a way back
 				module.turn ("around")
-				module.move ("forward")
-				module.move ("up")
-				module.move ("up")
+				-- move back until we'll be able to move up
+				while not module.move ("up") do
+					--if we can't move forward, move down
+					if not module.move ("forward") then
+						module.move ("down")
+						ascended = ascended - 1
+					else
+						-- increment the counter each time we move back
+						timesForward = timesForward + 1
+					end
+				end
+				-- increment ascended variable if module succeeded to move up
+				ascended = ascended + 1
+				-- turn around when we outta that big trouble
 				module.turn ("around")
-				ascended = ascended + 2
 			else
+				-- increment ascended variable if module succeeded to move up
 				ascended = ascended + 1
 			end
-		-- If turtle was trapped under the bedrock, go back, move up twice, and try again
-		elseif turtle.detectUp () and not turtle.digUp () then
-			module.turn ("around")
-			module.move ("forward")
-			module.move ("up")
-			module.move ("up")
-			module.turn ("around")
-			ascended = ascended + 2
 		else
-			module.checkSpace ()
+			-- decrement the counter if module succeded to move forward and dig the blocks above and below
+			timesForward = timesForward - 1
+			turtle.digUp ()
+			module.checkSpace()
 			turtle.digDown ()
 			module.checkSpace ()
-			return ascended
 		end
 	end
+	return ascended, hitBedrock
 end
 
 -- this function is used to move up or down, while digging a 2x1 hole.
--- it returns the actual number of blocks it moved
+-- it returns the actual number of blocks it moved if it hit bedrock
 local function column (direction, length)
 	turtle.dig ()
 	module.checkSpace ()
@@ -51,11 +65,13 @@ local function column (direction, length)
 	return length
 end
 
--- a small function which tries to dig a 1x3xlength line
--- it returns how much time module ascended during that line
+--- a small function which tries to dig a 1x3xlength line
+--- it returns how much time module ascended during that line and booleean that indicates if module hit bedrock
 local function makeLine (length)
 	-- this variable is used to remember how much times module ascended while moving forward
 	local ascended = 0
+	-- this one is true if module was interacting with bedrock
+	local hitBedrock = false
 	-- at the begining of the line dig down
 	turtle.digDown ()
 	module.checkSpace ()
@@ -63,13 +79,14 @@ local function makeLine (length)
 	module.checkFuel (2*length)
 	for i = 1, length-1 do
 		-- try to move down if ascended is greater than zero
-		if ascended > 0 and module.move("down") then
+		while ascended > 0 and module.move("down") do
 			ascended = ascended - 1
 		end
-		ascended = ascended + safeForward ()
+		ascended, hitBedrock = safeForward ()
 	end
-	return ascended
+	return ascended, hitBedrock
 end
+
 
 -- this is the main mining function
 local function slice (length, depth)
@@ -88,7 +105,10 @@ local function slice (length, depth)
 		local finish = false
 		local currentDepth = 0
 		while not finish do
-			currentDepth = currentDepth - makeLine (length)
+			local ascended = 0
+			-- change the depth if module has ascended and set finish to true if module has hit bedrock while moving
+			ascended, finish = makeLine (length)
+			currentDepth = currentDepth - ascended
 			module.turn ("around")
 			for i = 1, 3 do 
 				-- if module is deep enough or cannot move down, stop
