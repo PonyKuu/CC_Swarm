@@ -1,7 +1,7 @@
 -- Mastermine is a Master part of turtle swarm quarry made by PonyKuu
--- It uses my master API v0.2
+-- It uses my master API v0.2a
  
--- version 0.2
+-- Version 0.3
 
 os.loadAPI ("master")
 

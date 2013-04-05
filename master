@@ -1,8 +1,5 @@
 -- master API by PonyKuu
--- Version 0.2
--- Changelog:
----- Returned back to simplified module placement. Only 64 modules can operate at the same time
----- It is possible to disable fuel and/or stuff chests (Make sure that you did that in module code as well)
+-- Version 0.2a
 
 -- A little change to standard assert function 
 _G.assert = function(condition, errMsg, level)

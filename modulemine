@@ -1,4 +1,7 @@
--- A "slicing" module program. It digs a "slice" that's 1-wide area of given length and depth
+-- Mastermine is a Module part of turtle swarm quarry made by PonyKuu
+-- It uses my module API v0.2a
+
+-- Version 0.3
  
 os.loadAPI ("module")
 

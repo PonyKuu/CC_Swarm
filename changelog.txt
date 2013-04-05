@@ -1,0 +1,6 @@
+1. Added an ysize parameter to mastermine
+2. Changed module mining algorithm:
+	instead of mining 4x4 coulmn, module mines a variable sized 1xMxN slice.
+	module mines 3 layers at ones, so that should reduce th fuel usage
+	master tries to distribute all the modules available.
+3. Minor bugfixes

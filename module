@@ -1,16 +1,5 @@
 -- module API by PonyKuu
--- Version 0.2
--- Changelog:
----- Works with infinity fuel
----- Ability to set the navigation method using the module.navigationMethod (newMethod) function
------- method is a function that should accept a table of coordinates as an argument and move it to specified location.
------- Default method is the same, it's now called module.highwayNavigate (destination)
------- Don't forget to use API movement functions to keep tracking the position of the turtle
----- naviZones is now called naviData, and added the module.getNaviData function to get navigation data if you want to use it in your navigation method
----- Ability to set the configuration of Ender Chests or disable each of them at all using module.setChests (newConfiguration)
------- newCounfiguraton is a table with type of chest as key and slot as value. The API cares only about "Fuel" and "Stuff" fields.
------- Set the field to nil to disable that chest. WARNING: Disable fuel chest only if you have infinite fuel.
----- Fallback Location is now set by separate function module.setFallback (newFallbackLocation)
+-- Version 0.2a
 
 -- A little change to standard assert function 
 _G.assert = function(condition, errMsg, level)
