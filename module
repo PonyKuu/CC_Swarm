@@ -565,8 +565,8 @@ end
 -- Return is a task to return. Master should pass a set of coordinates as well as "f" direction to make module face the Master.
 tTasks = {
 	Return = function (response)
-		dumpStuff ()
 		move ("forward")
+		dumpStuff ()
 		request ("Returned", 3)
 		sleep (30)
 	end
