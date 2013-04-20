@@ -232,7 +232,7 @@ end
 -- Refuel temporary uses 16 slot to get the fuel out of fuel chest
 local function refuel (amount)
 	local fuel =  turtle.getFuelLevel ()
-	if fuel == "Infinity" or fuel > amount then
+	if fuel == "unlimited" or fuel > amount then
 		return true
 	else
 		assert (equipment.Fuel, "Fuel chest is not set while fuel is finite.", 2)

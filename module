@@ -236,7 +236,7 @@ end
 function checkFuel (amount)
 	assert (type(amount) == "number", "Bad fuel amount. Number required, got "..type(amount), 2)
 	local fuel = turtle.getFuelLevel() 
-	if fuel == "Infinity" or fuel > amount then
+	if fuel == "unlimited" or fuel > amount then
 		return true
 	else
 		turtle.select (chests.Fuel)
