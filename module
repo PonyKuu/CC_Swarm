@@ -244,6 +244,8 @@ function checkFuel (amount)
 		turtle.suckUp ()
 		while true do
 			if not turtle.refuel (1) then
+				turtle.dropUp ()
+				os.sleep (1)
 				turtle.suckUp ()
 			end
 			if turtle.getFuelLevel () >= amount then
