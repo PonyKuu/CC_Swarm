@@ -251,10 +251,12 @@ function checkFuel (amount)
 				turtle.suckUp ()
 			end
 			if turtle.getFuelLevel () >= amount then
-				turtle.dropUp ()
+				if turtle.getItemCount (chests.Fuel) > 0 then
+					turtle.dropUp ()
+				end
 				-- If it can't drop all the fuel into chest, just consume it all
-				if turtle.getItemCount (chests.Fuel) then
-					turtle.refuel ()
+				if turtle.getItemCount (chests.Fuel) > 0 then
+					turtle.refuel (1)
 				end
 				turtle.digUp ()
 				turtle.select (1)
@@ -544,6 +546,7 @@ end
 -- We need to read all the data we need to move around - turtle's position and navigation zones
 -- "initdata" is the file created by Master and containing all the data that's similar for each module placed by that Master
 function init ()
+	sleep(2)
 	local file = fs.open ("/disk/initdata", "r")
 	local communicationData = textutils.unserialize (file.readLine ())
 	Master = communicationData.MasterID
