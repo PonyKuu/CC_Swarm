@@ -544,6 +544,7 @@ end
 -- We need to read all the data we need to move around - turtle's position and navigation zones
 -- "initdata" is the file created by Master and containing all the data that's similar for each module placed by that Master
 function init ()
+	sleep(2)
 	local file = fs.open ("/disk/initdata", "r")
 	local communicationData = textutils.unserialize (file.readLine ())
 	Master = communicationData.MasterID
