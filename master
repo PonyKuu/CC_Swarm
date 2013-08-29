@@ -278,6 +278,7 @@ end
 -- Scriptname is the name of the main module script
 local function prepareFiles (scriptname)
 	-- Copy all the required files on the disk
+	sleep(1)
 	if fs.exists ("/disk/module") then
 		fs.delete ("/disk/module")
 	end
